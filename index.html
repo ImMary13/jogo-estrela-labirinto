@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Estrelas no Labirinto</title>
+  <style>
+    body {
+      background: #111;
+      color: white;
+      font-family: sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    canvas {
+      display: block;
+      margin: 10px auto;
+      border: 2px solid white;
+      background: #222;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin: 10px;
+    }
+    button {
+      font-size: 18px;
+      padding: 10px 20px;
+      background-color: #444;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    button:hover {
+        background-color: #666;
+    }
+    #gameOverScreen, #victoryScreen {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.9);
+      color: white;
+      font-size: 32px;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      z-index: 10;
+    }
+    #startScreen {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.95);
+      color: white;
+      font-size: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      z-index: 100;
+    }
+    #startScreen button {
+        font-size: 26px;
+        padding: 15px 30px;
+        background-color: #007bff;
+        border-radius: 10px;
+        margin-top: 30px;
+    }
+    #startScreen button:hover {
+        background-color: #0056b3;
+    }
+    h1 {
+        margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🌟 Estrelas no Labirinto</h1>
+  <p id="faseInfo">Fase 1 - Controlando: Estrela Ciano</p>
+  <canvas id="game" width="320" height="320"></canvas>
+  <div class="controls">
+    <button onclick="move(0, -1)">⬆️</button>
+    <div>
+      <button onclick="move(-1, 0)">⬅️</button>
+      <button onclick="move(1, 0)">➡️</button>
+    </div>
+    <button onclick="move(0, 1)">⬇️</button>
+    <button onclick="restart()">🔁 Reiniciar</button>
+  </div>
+
+  <div id="gameOverScreen" class="controls">
+    <p>💀 Fim de jogo</p>
+    <button onclick="restart()">🔁 Tentar novamente</button>
+  </div>
+  <div id="victoryScreen" class="controls">
+    <p>🎉 Você venceu!</p>
+    <button onclick="restart()">🔁 Jogar novamente</button>
+  </div>
+
+  <div id="startScreen">
+    <p>Bem-vindo ao Estrelas no Labirinto!</p>
+    <button id="startButton">▶️ Jogar</button>
+  </div>
+
+  <audio id="backgroundMusic" src="https://immary13.github.io/jogo-estrela-labirinto/%C3%A1udio%20fundo%202.mp3" loop></audio>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const grid = 20;
+    let fase = 0;
+    let controlando = "ciano";
+    let intervalMonstro;
+    let podeMover = true;
+    let monstroAtivo = false;
+    let passos = 0;
+    let posicaoInicial = null;
+    let rastro = [];
+
+    const bgm = document.getElementById("backgroundMusic");
+    const startScreen = document.getElementById("startScreen");
+    const startButton = document.getElementById("startButton");
+
+    startButton.addEventListener('click', () => {
+      bgm.play().then(() => bgm.pause()).catch(e => console.warn("Erro ao pré-carregar BGM:", e));
+
+      setTimeout(() => {
+        startScreen.style.display = 'none';
+        bgm.play().catch(e => console.log("Erro ao tocar música de fundo:", e));
+        carregarFase();
+      }, 50);
+    }, { once: true });
+
+    const labirintos = [
+      [ // Fase 0
+        "################",
+        "#C     #       #",
+        "# ### ##### ## #",
+        "#   #     # ## #",
+        "### ### # # ## #",
+        "#     # #    # #",
+        "# ### # #####  #",
+        "#   #         L#",
+        "################"
+      ],
+      [ // Fase 1
+        "################",
+        "#L   ##        #",
+        "### ## ######  #",
+        "#     #     #  #",
+        "# ####### # #  #",
+        "#       # # #  #",
+        "# ##### # # ####",
+        "#     #   C    #",
+        "################"
+      ],
+      [ // Fase 2 (Terceiro Labirinto - DIFICULTADO)
+        "################",
+        "#C#   #        #",
+        "# ##### ###### #",
+        "# #   # #    # #",
+        "# # ### # ## # #",
+        "# # #   # #  # #",
+        "# ### ### # ## #",
+        "#           L  #",
+        "################"
+      ],
+      [ // Fase 3 (Quarta Fase - POSIÇÕES INVERTIDAS: L no esquerdo, C no direito)
+        "################",
+        "#L           C #",
+        "# ### ###### # #",
+        "# # # #    # # #",
+        "# # # # #### # #",
+        "# # # # #    # #",
+        "# # # # ###### #",
+        "#   #          #",
+        "################"
+      ],
+      [ // Fase 4 (Quinta e última fase - MODIFICADO)
+        "################",
+        "#C# #########  #",
+        "# # # ##### # ##",
+        "# # # #   # #  #",
+        "# # ### # # # ##",
+        "# #   # # # #  #",
+        "# ##### # # # ##",
+        "#       #   L  #",
+        "################"
+      ]
+    ];
+
+    let mapa = [];
+    let ciano = {x: 0, y: 0};
+    let laranja = {x: 0, y: 0};
+    let monstro = null;
+    let speed = 400;
+
+    function carregarFase() {
+      if (fase >= labirintos.length) {
+        clearInterval(intervalMonstro);
+        podeMover = false;
+        bgm.pause();
+        document.getElementById("victoryScreen").style.display = "flex";
+        return;
+      }
+
+      clearInterval(intervalMonstro);
+      podeMover = true;
+      monstroAtivo = false;
+      passos = 0;
+      rastro = [];
+      posicaoInicial = null;
+      monstro = null;
+      document.getElementById("gameOverScreen").style.display = "none";
+      document.getElementById("victoryScreen").style.display = "none";
+
+      mapa = labirintos[fase].map(row => row.split(""));
+
+      for (let y = 0; y < mapa.length; y++) {
+        for (let x = 0; x < mapa[y].length; x++) {
+          if (mapa[y][x] === "C") ciano = {x, y};
+          if (mapa[y][x] === "L") laranja = {x, y};
+        }
+      }
+
+      posicaoInicial = controlando === "ciano" ? {...ciano} : {...laranja};
+
+      document.getElementById("faseInfo").innerText = `Fase ${fase + 1} - Controlando: Estrela ${controlando === "ciano" ? "Ciano" : "Laranja"}`;
+
+      if (bgm.paused) {
+          bgm.play().catch(e => console.log("Erro ao retomar música de fundo:", e));
+      } else {
+          bgm.currentTime = 0;
+      }
+
+      desenhar();
+    }
+
+    function desenhar() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let y = 0; y < mapa.length; y++) {
+        for (let x = 0; x < mapa[y].length; x++) {
+          ctx.fillStyle = mapa[y][x] === "#" ? "#555" : "#222";
+          ctx.fillRect(x * grid, y * grid, grid, grid);
+        }
+      }
+
+      if (monstro) {
+        ctx.fillStyle = "beige";
+        ctx.fillRect(monstro.x * grid + 4, monstro.y * grid + 4, grid - 8, grid - 8);
+      }
+
+      desenharEstrela(ciano.x, ciano.y, "cyan");
+      desenharEstrela(laranja.x, laranja.y, "orange");
+    }
+
+    function desenharEstrela(x, y, cor) {
+      const cx = x * grid + grid / 2;
+      const cy = y * grid + grid / 2;
+      const spikes = 5;
+      const outer = 8, inner = 3;
+      let rot = Math.PI / 2 * 3, step = Math.PI / spikes;
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - outer);
+      for (let i = 0; i < spikes; i++) {
+        let x1 = cx + Math.cos(rot) * outer;
+        let y1 = cy + Math.sin(rot) * outer;
+        ctx.lineTo(x1, y1);
+        rot += step;
+        x1 = cx + Math.cos(rot) * inner;
+        y1 = cy + Math.sin(rot) * inner;
+        rot += step;
+      }
+      ctx.closePath();
+      ctx.fillStyle = cor;
+      ctx.fill();
+    }
+
+    function move(dx, dy) {
+      if (!podeMover) return;
+
+      const estrela = controlando === "ciano" ? ciano : laranja;
+      const nx = estrela.x + dx;
+      const ny = estrela.y + dy;
+
+      if (mapa[ny] === undefined || mapa[ny][nx] === undefined || mapa[ny][nx] === "#") {
+        return;
+      }
+
+      estrela.x = nx;
+      estrela.y = ny;
+      passos++;
+      rastro.push({x: nx, y: ny});
+
+      desenhar();
+
+      if (!monstroAtivo && passos >= 2) {
+        monstroAtivo = true;
+        setTimeout(() => {
+          monstro = {...posicaoInicial};
+          desenhar();
+          speed = Math.max(150, 350 - fase * 40);
+          intervalMonstro = setInterval(moverMonstroRastro, speed);
+        }, 1000);
+      }
+
+      if (ciano.x === laranja.x && ciano.y === laranja.y) {
+        if (fase < labirintos.length - 1) {
+          fase++;
+          controlando = controlando === "ciano" ? "laranja" : "ciano";
+          carregarFase();
+        } else {
+          clearInterval(intervalMonstro);
+          podeMover = false;
+          bgm.pause();
+          document.getElementById("victoryScreen").style.display = "flex";
+        }
+      }
+    }
+
+    function moverMonstroRastro() {
+      if (!podeMover || !monstro) return;
+
+      if (rastro.length > 0) {
+        const proximo = rastro.shift();
+        if (mapa[proximo.y] !== undefined && mapa[proximo.y][proximo.x] !== undefined && mapa[proximo.y][proximo.x] !== "#") {
+          monstro.x = proximo.x;
+          monstro.y = proximo.y;
+        } else {
+            rastro = [];
+        }
+      }
+
+      if ((monstro.x === ciano.x && monstro.y === ciano.y) || (monstro.x === laranja.x && monstro.y === laranja.y)) {
+        gameOver();
+      }
+
+      desenhar();
+    }
+
+    function gameOver() {
+      podeMover = false;
+      clearInterval(intervalMonstro);
+      bgm.pause();
+      document.getElementById("gameOverScreen").style.display = "flex";
+    }
+
+    function restart() {
+      fase = 0;
+      controlando = "ciano";
+      startScreen.style.display = 'flex';
+      location.reload();
+    }
+  </script>
+</body>
+</html>
