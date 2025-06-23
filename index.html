@@ -101,7 +101,7 @@
 
   <div id="gameOverScreen" class="controls">
     <p>💀 Fim de jogo</p>
-    <button onclick="restart()">🔁 Tentar novamente</button>
+    <button onclick="restart()">🔁 Tentar novamente</p>
   </div>
   <div id="victoryScreen" class="controls">
     <p>🎉 Você venceu!</p>
@@ -132,14 +132,19 @@
     const startScreen = document.getElementById("startScreen");
     const startButton = document.getElementById("startButton");
 
-    startButton.addEventListener('click', () => {
-      bgm.play().then(() => bgm.pause()).catch(e => console.warn("Erro ao pré-carregar BGM:", e));
+    // Tenta carregar a música antes da interação.
+    // O preload="auto" na tag audio também ajuda, mas essa linha garante.
+    bgm.load();
 
-      setTimeout(() => {
-        startScreen.style.display = 'none';
-        bgm.play().catch(e => console.log("Erro ao tocar música de fundo:", e));
-        carregarFase();
-      }, 50);
+    startButton.addEventListener('click', () => {
+      startScreen.style.display = 'none';
+      
+      // Tenta tocar a música SOMENTE APÓS o clique do usuário.
+      bgm.play().catch(e => {
+        console.error("Erro ao tocar música de fundo após o clique:", e);
+        alert("O navegador bloqueou o áudio. Por favor, interaja com a página novamente ou verifique as configurações de autoplay do seu navegador.");
+      });
+      carregarFase();
     }, { once: true });
 
     const labirintos = [
@@ -238,9 +243,11 @@
 
       document.getElementById("faseInfo").innerText = `Fase ${fase + 1} - Controlando: Estrela ${controlando === "ciano" ? "Ciano" : "Laranja"}`;
 
-      if (bgm.paused) {
+      // Removido o bgm.play() daqui para garantir que só toque no clique inicial.
+      // Se a música pausar, ela será retomada no 'restart'.
+      if (bgm.paused && !document.getElementById("startScreen").style.display) { // Apenas tenta retomar se não estiver na tela inicial
           bgm.play().catch(e => console.log("Erro ao retomar música de fundo:", e));
-      } else {
+      } else if (!bgm.paused) {
           bgm.currentTime = 0;
       }
 
@@ -362,6 +369,7 @@
       fase = 0;
       controlando = "ciano";
       startScreen.style.display = 'flex';
+      // Recarregar a página para garantir que o áudio seja re-iniciado com a permissão do clique.
       location.reload();
     }
   </script>
